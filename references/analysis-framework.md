@@ -118,6 +118,88 @@ Skills that produce code or configuration:
 
 ---
 
+## Multi-Agent Evaluation Framework
+
+### Agent Roles
+
+| Agent | Core Question | Evaluates |
+|-------|--------------|-----------|
+| **Advocate** | "Why should we make this change?" | Benefits, user impact, future-proofing, missed opportunities if deferred |
+| **Skeptic** | "Why should we NOT change this?" | Regression risk, churn cost, insufficient evidence, false positives |
+| **Pragmatist** | "What's the minimal effective change?" | Cost-benefit ratio, timing, scope reduction, phased approach |
+
+### Agent Prompt Template
+
+Each agent receives the same evidence package:
+
+```
+You are the [Advocate/Skeptic/Pragmatist] evaluating proposed changes to the
+[skill-name] skill.
+
+## Evidence
+[Internal evidence items]
+
+## External Research
+[Research findings from smart-search/WebSearch]
+
+## User Feedback
+[Any direct user input]
+
+## Proposed Changes
+[List of proposed changes with before/after]
+
+Evaluate each proposed change from your perspective. For each change, provide:
+1. Assessment: change / defer / reject
+2. Confidence: low / medium / high
+3. Key reasoning (2-3 bullet points)
+```
+
+### Synthesis Rules
+
+| Outcome | Condition | Action |
+|---------|-----------|--------|
+| **Consensus** | All 3 agents agree | Proceed with shared recommendation |
+| **Strong majority** | 2 agree, 1 dissents with low confidence | Proceed, note dissent |
+| **Weak majority** | 2 agree, 1 dissents with high confidence | Present both views to user |
+| **Split** | No majority | Present all views, user decides |
+
+---
+
+## Observation Log Guidelines
+
+### When to Create observations.md
+
+Create `~/.claude/skills/<skill-name>/observations.md` when:
+- A finding doesn't meet the "Act Now" threshold
+- Evidence comes from a single source only
+- Technology is in flux (beta, unconfirmed changes)
+- The change is an optimization, not a fix
+
+### Observation Categories
+
+| Category | Tag | Examples |
+|----------|-----|---------|
+| Technology drift | `tech` | API response format changed, new endpoint available |
+| Edge case | `edge` | Unusual input caused unexpected behavior |
+| Enhancement | `enhance` | Better approach discovered but current works fine |
+| Flow improvement | `flow` | Steps could be reordered for efficiency |
+
+### Promotion Criteria
+
+An observation should be promoted to "Act Now" when:
+- Same issue observed in 2+ separate executions
+- External source officially confirms the change (changelog, docs update)
+- User explicitly reports the issue
+- The observation's trigger condition is met
+
+### Cleanup Rules
+
+- Review pending observations each time the optimizer runs on that skill
+- Dismiss observations older than 90 days with no additional evidence
+- Move dismissed observations to Resolved with reason "insufficient evidence"
+
+---
+
 ## Optimization Session Template
 
 Use this template when running a full optimization session:
@@ -134,14 +216,27 @@ Use this template when running a full optimization session:
 1. [Evidence item with category tag]
 2. [Evidence item with category tag]
 
+### External Research
+- [Source]: [Finding]
+- [Source]: [Finding]
+
+### Multi-Agent Evaluation
+| Change | Advocate | Skeptic | Pragmatist | Consensus |
+|--------|----------|---------|------------|-----------|
+| #1 ... | change (high) | change (medium) | change (high) | Consensus: change |
+| #2 ... | change (medium) | defer (high) | defer (medium) | Majority: defer |
+
 ### Proposed Changes
-| # | Category | Description | Risk | Status |
-|---|----------|-------------|------|--------|
-| 1 | fix | ... | Low | Pending |
-| 2 | tech | ... | Medium | Pending |
+| # | Category | Description | Risk | Decision | Status |
+|---|----------|-------------|------|----------|--------|
+| 1 | fix | ... | Low | Act now | Pending |
+| 2 | tech | ... | Medium | Defer | → observations.md |
 
 ### Changes Applied
 - [List of changes that were approved and applied]
+
+### Deferred to Observations
+- [List of findings moved to observations.md with trigger conditions]
 
 ### Version Bump
 - Before: X.Y.Z
