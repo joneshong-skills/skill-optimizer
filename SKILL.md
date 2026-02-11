@@ -6,7 +6,7 @@ description: >-
   "improve this skill", "改進 skill", "優化技能", "skill 需要更新",
   "剛剛那個流程可以改進", or after a skill execution encounters errors,
   workarounds, user corrections, or outdated behavior.
-version: 0.1.0
+version: 0.2.0
 argument-hint: "skill name (or leave blank to auto-detect from context)"
 ---
 
@@ -15,6 +15,12 @@ argument-hint: "skill name (or leave blank to auto-detect from context)"
 Analyze skill execution results, identify improvements, and apply targeted updates
 to keep skills effective and current. Preserve core principles and logic while
 adapting tools, techniques, and implementation details as technology evolves.
+
+## Prerequisites
+
+- The **smart-search** skill installed (`~/.claude/skills/smart-search/`) — for external research
+- Skills installed in `~/.claude/skills/` with git repositories
+- WebSearch tool available as fallback when smart-search is unavailable
 
 ## Design Philosophy
 
@@ -46,7 +52,7 @@ Load the target skill's files:
 - `~/.claude/skills/<name>/references/*` (if any)
 - `~/.claude/skills/<name>/scripts/*` (if any)
 
-### Step 2 — Gather Evidence
+### Step 2 — Gather Internal Evidence
 
 Analyze the conversation context for improvement signals. Collect evidence in these categories:
 
@@ -76,9 +82,54 @@ Analyze the conversation context for improvement signals. Collect evidence in th
 - Redundant operations (reading the same file twice, unnecessary snapshots)
 - Overly complex flows that could be simplified
 
-### Step 3 — Classify Changes
+### Step 3 — External Research
 
-For each piece of evidence, classify the required change:
+**This step is mandatory.** Internal evidence alone is insufficient — verify findings and
+discover improvements through external sources before proposing any changes.
+
+#### 3a. Research via smart-search
+
+Invoke the **smart-search** skill to query relevant topics. Focus queries on:
+
+- **Platform changes**: "Grok image generation API changes 2026", "Gemini web interface updates"
+- **Tool updates**: "Playwright MCP new features", "BrowserTools latest capabilities"
+- **Best practices**: "browser automation image download best practices"
+- **Deprecations**: "deprecated APIs" or tools referenced in the skill
+- **Alternatives**: "alternatives to [current approach]" when a workaround was needed
+
+Select the most appropriate search source based on the query:
+- **DeepWiki / Context7**: For library/framework documentation (free or precise)
+- **Perplexity Pro**: For current events, platform policy changes, broad research
+- **WebSearch**: For quick factual lookups when smart-search is unavailable
+
+#### 3b. Cross-reference with User Feedback
+
+After collecting external research results:
+
+1. **Present a summary** of internal evidence + external findings to the user
+2. **Ask specific questions** where research is ambiguous:
+   - "Research shows Grok now supports 1:1 aspect ratios — have you noticed this?"
+   - "Gemini's thinking mode quota may have changed — want me to verify?"
+3. **Incorporate user knowledge** — the user may know things not available online
+   (internal tools, unpublished changes, personal preferences)
+
+#### 3c. Synthesize
+
+Combine all three sources into a unified assessment:
+
+| Source | Strength | Weakness |
+|--------|----------|----------|
+| Internal evidence | Specific, recent, contextual | Limited to one execution |
+| External research | Broad, current, authoritative | May not match user's exact setup |
+| User feedback | Ground truth for their environment | May be incomplete or assumed |
+
+When sources conflict, prioritize: **User feedback > Internal evidence > External research**.
+The user's actual experience in their environment is the ultimate authority.
+
+### Step 4 — Classify Changes
+
+For each finding (from internal evidence, external research, and user feedback),
+classify the required change:
 
 | Category | Icon | Description | Risk | Approval |
 |----------|------|-------------|------|----------|
@@ -89,23 +140,23 @@ For each piece of evidence, classify the required change:
 | Flow Restructure | `flow` | Workflow steps need reordering or redesign | High | Discuss with user first |
 | Principle Change | `principle` | Core assumptions or goals need rethinking | Critical | Full discussion required |
 
-### Step 4 — Propose Changes
+### Step 5 — Propose Changes
 
 Present findings as a structured change list. For each change:
 
 ```
 ### [category] Brief title
 
-**Evidence**: What happened in the conversation that triggered this
+**Evidence**: What happened (internal) + what research found (external)
 **Current**: What the skill currently says/does
 **Proposed**: What it should say/do instead
-**Rationale**: Why this change improves the skill
+**Rationale**: Why this change improves the skill (cite sources)
 **Risk**: Low / Medium / High
 ```
 
 Group changes by file (SKILL.md, references, scripts) for clarity.
 
-### Step 5 — Apply Changes
+### Step 6 — Apply Changes
 
 After user reviews and approves:
 
@@ -126,7 +177,7 @@ After user reviews and approves:
    Evidence: what triggered the update
    ```
 
-### Step 6 — Record Learning (Optional)
+### Step 7 — Record Learning (Optional)
 
 If the improvement reveals a pattern that applies across multiple skills,
 record it in auto-memory (`~/.claude/projects/.../memory/`) for future reference.
