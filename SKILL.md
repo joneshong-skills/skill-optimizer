@@ -126,28 +126,100 @@ Combine all three sources into a unified assessment:
 When sources conflict, prioritize: **User feedback > Internal evidence > External research**.
 The user's actual experience in their environment is the ultimate authority.
 
-### Step 4 — Classify Changes
+### Step 4 — Multi-Agent Evaluation
 
-For each finding (from internal evidence, external research, and user feedback),
-classify the required change:
+**Do not rely on a single perspective.** Use parallel sub-agents (via the Task tool)
+to evaluate proposed changes from different angles. This produces more objective,
+well-reasoned decisions.
 
-| Category | Icon | Description | Risk | Approval |
-|----------|------|-------------|------|----------|
-| Bug Fix | `fix` | Something broke or produces wrong results | Low | Auto-apply |
-| Enhancement | `enhance` | Better approach discovered during execution | Low | Auto-apply |
-| Tech Update | `tech` | Tool, API, or platform changed | Medium | Summarize, then apply |
-| New Edge Case | `edge` | Scenario not covered by current skill | Medium | Summarize, then apply |
-| Flow Restructure | `flow` | Workflow steps need reordering or redesign | High | Discuss with user first |
-| Principle Change | `principle` | Core assumptions or goals need rethinking | Critical | Full discussion required |
+#### Launch 2-3 Parallel Agents
 
-### Step 5 — Propose Changes
+Use the Task tool with `subagent_type=general-purpose` to spawn agents simultaneously.
+Each agent receives the same evidence package but evaluates from a different perspective:
 
-Present findings as a structured change list. For each change:
+| Agent | Perspective | Focus |
+|-------|------------|-------|
+| **Advocate** | "Why should we make this change?" | Benefits, improvements, future-proofing |
+| **Skeptic** | "Why should we NOT change this?" | Risks, regressions, unnecessary churn |
+| **Pragmatist** | "What's the minimal effective change?" | Cost-benefit, timing, priority |
+
+Each agent should return:
+- Their assessment (change / defer / reject)
+- Confidence level (low / medium / high)
+- Key reasoning (2-3 bullet points)
+
+#### Synthesize Agent Results
+
+After all agents complete, synthesize their outputs:
+- **Consensus (all agree)** → Proceed with their shared recommendation
+- **Majority (2 of 3)** → Present the majority view and the dissenting view to user
+- **Split (no majority)** → Present all views, let the user decide
+
+### Step 5 — Decide: Act Now or Defer
+
+Not every finding warrants immediate action. Apply the **confidence threshold** to decide.
+
+#### Act Now — When ALL of these are true:
+- Evidence confirmed by 2+ sources (internal + external, or internal + user)
+- Multi-agent evaluation reaches consensus or strong majority
+- The change fixes something currently broken, or risk of inaction is high
+- The skill is actively used and the issue will recur
+
+#### Defer to Observation Log — When ANY of these are true:
+- Only one source of evidence (single execution, single search result)
+- Agents are split or confidence is low
+- The change is "nice to have" but nothing is broken
+- The technology is in flux (new release, beta feature, unconfirmed reports)
+- Need more data points from future executions to confirm the pattern
+
+#### Observation Log
+
+Store deferred findings in `~/.claude/skills/<skill-name>/observations.md`.
+Create this file if it doesn't exist. Format:
+
+```markdown
+# Observations — <skill-name>
+
+## Pending
+
+### YYYY-MM-DD — Brief title
+- **Category**: tech / edge / enhance / flow
+- **Evidence**: What was observed
+- **Research**: What external sources say
+- **Confidence**: Low / Medium
+- **Trigger**: What would confirm this needs action
+  (e.g., "If this happens 2 more times" or "When platform officially announces")
+
+## Resolved
+
+### YYYY-MM-DD — Brief title (→ applied in v0.3.0 / dismissed)
+- **Resolution**: What was decided and why
+```
+
+When the optimizer runs again on the same skill, **check observations.md first**.
+If a pending observation now has additional evidence, it may cross the threshold
+for action.
+
+### Step 6 — Classify and Propose Changes
+
+For findings that pass the "Act Now" threshold:
+
+| Category | Description | Risk | Approval |
+|----------|-------------|------|----------|
+| Bug Fix | Something broke or produces wrong results | Low | Auto-apply |
+| Enhancement | Better approach discovered during execution | Low | Auto-apply |
+| Tech Update | Tool, API, or platform changed | Medium | Summarize, then apply |
+| New Edge Case | Scenario not covered by current skill | Medium | Summarize, then apply |
+| Flow Restructure | Workflow steps need reordering or redesign | High | Discuss with user first |
+| Principle Change | Core assumptions or goals need rethinking | Critical | Full discussion required |
+
+Present each change:
 
 ```
 ### [category] Brief title
 
 **Evidence**: What happened (internal) + what research found (external)
+**Agent consensus**: Advocate / Skeptic / Pragmatist views
 **Current**: What the skill currently says/does
 **Proposed**: What it should say/do instead
 **Rationale**: Why this change improves the skill (cite sources)
@@ -156,7 +228,7 @@ Present findings as a structured change list. For each change:
 
 Group changes by file (SKILL.md, references, scripts) for clarity.
 
-### Step 6 — Apply Changes
+### Step 7 — Apply Changes
 
 After user reviews and approves:
 
@@ -170,14 +242,16 @@ After user reviews and approves:
    - Flow restructure / principle change: major bump (0.1.0 → 1.0.0)
 3. **Update references** — If the change involves detailed technical content, update
    or create reference files rather than bloating SKILL.md
-4. **Commit and push** — Use a descriptive commit message:
+4. **Update observations.md** — Move resolved observations from Pending to Resolved
+5. **Commit and push** — Use a descriptive commit message:
    ```
    [skill-name] category: brief description of change
 
    Evidence: what triggered the update
+   Agent consensus: advocate/skeptic/pragmatist assessment
    ```
 
-### Step 7 — Record Learning (Optional)
+### Step 8 — Record Learning (Optional)
 
 If the improvement reveals a pattern that applies across multiple skills,
 record it in auto-memory (`~/.claude/projects/.../memory/`) for future reference.
