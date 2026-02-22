@@ -2,6 +2,17 @@
 
 Detailed criteria for analyzing skill executions and identifying improvements.
 
+## Table of Contents
+
+- [Evidence Collection Checklist](#evidence-collection-checklist)
+- [Evidence Synthesis](#evidence-synthesis)
+- [Technology Lifecycle Tracking](#technology-lifecycle-tracking)
+- [Change Impact Assessment](#change-impact-assessment)
+- [Cross-Skill Improvement Patterns](#cross-skill-improvement-patterns)
+- [Multi-Agent Evaluation Framework](#multi-agent-evaluation-framework)
+- [Observation Log Guidelines](#observation-log-guidelines)
+- [Optimization Session Template](#optimization-session-template)
+
 ---
 
 ## Evidence Collection Checklist
@@ -31,11 +42,43 @@ Run through this checklist after each skill execution to identify optimization o
 
 ### Skill Quality
 
-- [ ] Is SKILL.md under 2,000 words? (move details to references if over)
+- [ ] Is SKILL.md body under 500 lines? (move details to references if over)
 - [ ] Are all referenced files up to date?
 - [ ] Does the decision tree cover the common cases?
 - [ ] Are error handling and fallback paths documented?
 - [ ] Is the skill language-agnostic where possible?
+
+---
+
+## Evidence Synthesis
+
+Combine internal evidence, external research, and user feedback into a unified assessment.
+
+### Source Weighting
+
+| Source | Weight | Strength | Weakness |
+|--------|--------|----------|----------|
+| **User feedback** | Highest | Ground truth for their environment | May be incomplete or assumed |
+| **Internal evidence** | High | Specific, recent, contextual | Limited to one execution |
+| **External research** | Medium | Broad, current, authoritative | May not match user's exact setup |
+
+### Conflict Resolution
+
+When sources conflict, apply this priority: **User feedback > Internal evidence > External research**.
+
+Examples:
+- User says "this works fine" but research says it's deprecated → **defer** (user's environment may differ)
+- Execution failed + research confirms API changed → **act now** (two sources agree)
+- Research says new feature exists but execution didn't need it → **defer** (nice-to-have, not broken)
+
+### Minimum Confidence Requirements
+
+| Decision | Required Sources | Minimum Agreement |
+|----------|-----------------|-------------------|
+| Act Now (bug fix) | 2+ sources | Internal + any other |
+| Act Now (enhancement) | 2+ sources | Internal + external or user |
+| Defer to observation | 1 source | Any single source |
+| Reject change | Any | Evidence contradicts the change |
 
 ---
 

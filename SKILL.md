@@ -6,7 +6,8 @@ description: >-
   "improve this skill", "改進 skill", "優化技能", "skill 需要更新",
   "剛剛那個流程可以改進", or after a skill execution encounters errors,
   workarounds, user corrections, or outdated behavior.
-version: 0.2.0
+version: 0.3.0
+tools: Read, Glob, Grep, Edit, Bash, Write, Task, WebSearch
 argument-hint: "skill name (or leave blank to auto-detect from context)"
 ---
 
@@ -15,6 +16,10 @@ argument-hint: "skill name (or leave blank to auto-detect from context)"
 Analyze skill execution results, identify improvements, and apply targeted updates
 to keep skills effective and current. Preserve core principles and logic while
 adapting tools, techniques, and implementation details as technology evolves.
+
+## Agent Delegation
+
+Delegate skill review to `reviewer` agent. Use `explorer` for pattern analysis.
 
 ## Prerequisites
 
@@ -82,78 +87,39 @@ Analyze the conversation context for improvement signals. Collect evidence in th
 - Redundant operations (reading the same file twice, unnecessary snapshots)
 - Overly complex flows that could be simplified
 
-### Step 3 — External Research
+### Step 3 — External Research (Conditional)
 
-**This step is mandatory.** Internal evidence alone is insufficient — verify findings and
-discover improvements through external sources before proposing any changes.
+**When to research**: Skills involving external platforms (web UIs, APIs, third-party services).
+**When to skip**: Pure code/logic skills (like orchestrators, validators) where issues are
+reproducible locally. Proceed directly to Step 4.
 
-#### 3a. Research via smart-search
+When research is needed, use **smart-search** or **WebSearch** to verify findings:
 
-Invoke the **smart-search** skill to query relevant topics. Focus queries on:
+- **Platform changes**: UI updates, API drift, new capabilities
+- **Deprecations**: Tools or services referenced in the skill
+- **Alternatives**: Better approaches when workarounds were needed
 
-- **Platform changes**: "Grok image generation API changes 2026", "Gemini web interface updates"
-- **Tool updates**: "Playwright MCP new features", "BrowserTools latest capabilities"
-- **Best practices**: "browser automation image download best practices"
-- **Deprecations**: "deprecated APIs" or tools referenced in the skill
-- **Alternatives**: "alternatives to [current approach]" when a workaround was needed
+After research, **cross-reference with user feedback** — the user's actual experience is
+the ultimate authority. Prioritize: **User feedback > Internal evidence > External research**.
 
-Select the most appropriate search source based on the query:
-- **DeepWiki / Context7**: For library/framework documentation (free or precise)
-- **Perplexity Pro**: For current events, platform policy changes, broad research
-- **WebSearch**: For quick factual lookups when smart-search is unavailable
-
-#### 3b. Cross-reference with User Feedback
-
-After collecting external research results:
-
-1. **Present a summary** of internal evidence + external findings to the user
-2. **Ask specific questions** where research is ambiguous:
-   - "Research shows Grok now supports 1:1 aspect ratios — have you noticed this?"
-   - "Gemini's thinking mode quota may have changed — want me to verify?"
-3. **Incorporate user knowledge** — the user may know things not available online
-   (internal tools, unpublished changes, personal preferences)
-
-#### 3c. Synthesize
-
-Combine all three sources into a unified assessment:
-
-| Source | Strength | Weakness |
-|--------|----------|----------|
-| Internal evidence | Specific, recent, contextual | Limited to one execution |
-| External research | Broad, current, authoritative | May not match user's exact setup |
-| User feedback | Ground truth for their environment | May be incomplete or assumed |
-
-When sources conflict, prioritize: **User feedback > Internal evidence > External research**.
-The user's actual experience in their environment is the ultimate authority.
+See `references/analysis-framework.md` § "Evidence Synthesis" for the full source-weighting table.
 
 ### Step 4 — Multi-Agent Evaluation
 
-**Do not rely on a single perspective.** Use parallel sub-agents (via the Task tool)
-to evaluate proposed changes from different angles. This produces more objective,
-well-reasoned decisions.
+Use parallel sub-agents (Task tool, `subagent_type=general-purpose`) to evaluate
+proposed changes from three perspectives:
 
-#### Launch 2-3 Parallel Agents
+| Agent | Core Question |
+|-------|--------------|
+| **Advocate** | "Why should we make this change?" |
+| **Skeptic** | "Why should we NOT change this?" |
+| **Pragmatist** | "What's the minimal effective change?" |
 
-Use the Task tool with `subagent_type=general-purpose` to spawn agents simultaneously.
-Each agent receives the same evidence package but evaluates from a different perspective:
+Each returns: assessment (change/defer/reject), confidence (low/medium/high), 2-3 bullet points.
 
-| Agent | Perspective | Focus |
-|-------|------------|-------|
-| **Advocate** | "Why should we make this change?" | Benefits, improvements, future-proofing |
-| **Skeptic** | "Why should we NOT change this?" | Risks, regressions, unnecessary churn |
-| **Pragmatist** | "What's the minimal effective change?" | Cost-benefit, timing, priority |
-
-Each agent should return:
-- Their assessment (change / defer / reject)
-- Confidence level (low / medium / high)
-- Key reasoning (2-3 bullet points)
-
-#### Synthesize Agent Results
-
-After all agents complete, synthesize their outputs:
-- **Consensus (all agree)** → Proceed with their shared recommendation
-- **Majority (2 of 3)** → Present the majority view and the dissenting view to user
-- **Split (no majority)** → Present all views, let the user decide
+Synthesis: **Consensus** → proceed. **Majority** → note dissent. **Split** → user decides.
+See `references/analysis-framework.md` § "Multi-Agent Evaluation Framework" for prompt
+templates and detailed synthesis rules.
 
 ### Step 5 — Decide: Act Now or Defer
 
@@ -175,30 +141,11 @@ Not every finding warrants immediate action. Apply the **confidence threshold** 
 #### Observation Log
 
 Store deferred findings in `~/.claude/skills/<skill-name>/observations.md`.
-Create this file if it doesn't exist. Format:
+When the optimizer runs again on the same skill, **check observations.md first** —
+if a pending observation now has additional evidence, it may cross the threshold for action.
 
-```markdown
-# Observations — <skill-name>
-
-## Pending
-
-### YYYY-MM-DD — Brief title
-- **Category**: tech / edge / enhance / flow
-- **Evidence**: What was observed
-- **Research**: What external sources say
-- **Confidence**: Low / Medium
-- **Trigger**: What would confirm this needs action
-  (e.g., "If this happens 2 more times" or "When platform officially announces")
-
-## Resolved
-
-### YYYY-MM-DD — Brief title (→ applied in v0.3.0 / dismissed)
-- **Resolution**: What was decided and why
-```
-
-When the optimizer runs again on the same skill, **check observations.md first**.
-If a pending observation now has additional evidence, it may cross the threshold
-for action.
+See `references/analysis-framework.md` § "Observation Log Guidelines" for the template
+format and promotion/cleanup criteria.
 
 ### Step 6 — Classify and Propose Changes
 
@@ -280,6 +227,25 @@ Examples of cross-skill learnings:
 - Cosmetic formatting or wording preferences
 - Adding speculative features the user hasn't needed
 - Removing fallback paths just because the primary path worked this time
+
+## Continuous Improvement
+
+This skill evolves with each use. After every invocation:
+
+1. **Reflect** — Identify what worked, what caused friction, and any unexpected issues
+2. **Record** — Append a concise lesson to `lessons.md` in this skill's directory
+3. **Refine** — When a pattern recurs (2+ times), update SKILL.md directly
+
+### lessons.md Entry Format
+
+```
+### YYYY-MM-DD — Brief title
+- **Friction**: What went wrong or was suboptimal
+- **Fix**: How it was resolved
+- **Rule**: Generalizable takeaway for future invocations
+```
+
+Accumulated lessons signal when to run `/skill-optimizer` for a deeper structural review.
 
 ## Additional Resources
 
