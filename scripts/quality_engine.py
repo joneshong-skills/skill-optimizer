@@ -28,9 +28,8 @@ from __future__ import annotations
 import argparse
 import json
 import re
-import sys
 import unicodedata
-from dataclasses import dataclass, asdict, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -43,12 +42,12 @@ MIN_KEYWORD_MATCHES = 2  # require at least this many keywords (or proportional 
 
 # Default composite weights — sum to 1.0
 DEFAULT_WEIGHTS = {
-    "true_positive_rate": 0.30,    # found / total ground-truth findings
-    "severity_accuracy": 0.15,     # correct severity / matched
-    "missing_coverage": 0.20,      # gap-analysis findings matched
+    "true_positive_rate": 0.30,  # found / total ground-truth findings
+    "severity_accuracy": 0.15,  # correct severity / matched
+    "missing_coverage": 0.20,  # gap-analysis findings matched
     "perspective_coverage": 0.15,  # multi-perspective findings matched
-    "evidence_rate": 0.10,         # CRITICAL+MAJOR with file:line / total CRITICAL+MAJOR
-    "process_compliance": 0.10,    # avg of pre-commit / multi-perspective / gap-analysis flags
+    "evidence_rate": 0.10,  # CRITICAL+MAJOR with file:line / total CRITICAL+MAJOR
+    "process_compliance": 0.10,  # avg of pre-commit / multi-perspective / gap-analysis flags
 }
 
 # Process compliance regex patterns — match the heading or characteristic phrasing
@@ -72,6 +71,15 @@ PROCESS_PATTERNS = {
 # Severity-prefix regex for parsing agent output
 SEVERITY_PREFIX = re.compile(
     r"\b(CRITICAL|MAJOR|MINOR|HIGH|MEDIUM|LOW)\b",
+    re.IGNORECASE,
+)
+
+# Perspective-finding start: "As a security engineer:", "As the stakeholder:",
+# "From the executor perspective:" — typically appear without a severity prefix
+# in multi-perspective sections. Default severity for these is MINOR.
+PERSPECTIVE_START = re.compile(
+    r"^(?:as\s+(?:a|an|the)\s+[\w-]+(?:\s+[\w-]+)?\s*[:,]"
+    r"|from\s+(?:a|an|the)\s+[\w-]+(?:\s+[\w-]+)?\s+perspective\s*[:,])",
     re.IGNORECASE,
 )
 
@@ -221,6 +229,11 @@ def parse_agent_output(text: str) -> list[ParsedFinding]:
     A 'finding' is recognized as either:
       - A list item or numbered item containing a SEVERITY token
       - A heading line (## or ###) containing a SEVERITY token
+      - A paragraph starting with a perspective marker ("As the stakeholder:",
+        "From the executor perspective:") — common in Multi-Perspective sections
+        where findings are cited without an explicit severity prefix. These
+        default to MINOR severity.
+
     Blocks continue until the next finding starts.
     """
     findings: list[ParsedFinding] = []
@@ -243,29 +256,36 @@ def parse_agent_output(text: str) -> list[ParsedFinding]:
     in_finding = False
     for line in lines:
         stripped = line.strip()
-        starts_finding = (
-            re.match(r"^(?:[-*]|\d+\.)\s+", stripped)
-            or re.match(r"^#{2,4}\s+", stripped)
+        # Strip leading list/bullet markers for perspective-start detection,
+        # so "- As the stakeholder: ..." also counts.
+        delisted = re.sub(r"^(?:[-*]|\d+\.)\s+", "", stripped)
+        is_structural_start = re.match(r"^(?:[-*]|\d+\.)\s+", stripped) or re.match(
+            r"^#{2,4}\s+", stripped
         )
-        if starts_finding and SEVERITY_PREFIX.search(stripped):
+        is_perspective_start = bool(PERSPECTIVE_START.match(delisted))
+
+        if is_structural_start and SEVERITY_PREFIX.search(stripped):
             flush()
             current = [stripped]
             m = SEVERITY_PREFIX.search(stripped)
             current_sev = m.group(1).upper() if m else "UNKNOWN"
             in_finding = True
+        elif is_perspective_start:
+            flush()
+            current = [stripped]
+            current_sev = "MINOR"  # perspective findings default to MINOR
+            in_finding = True
         elif in_finding:
             if not stripped:
-                # blank line — keep collecting
                 current.append(line)
-            elif re.match(r"^(?:[-*]|\d+\.)\s+", stripped) or re.match(
-                r"^#{2,4}\s+", stripped
-            ):
-                # new structural element — close current
+            elif re.match(r"^(?:[-*]|\d+\.)\s+", stripped) or re.match(r"^#{2,4}\s+", stripped):
                 flush()
                 current = [stripped]
                 m = SEVERITY_PREFIX.search(stripped)
                 if m:
                     current_sev = m.group(1).upper()
+                elif PERSPECTIVE_START.match(delisted):
+                    current_sev = "MINOR"
                 else:
                     current = []
                     in_finding = False
@@ -305,10 +325,7 @@ def match_findings(
 
 def detect_process_flags(text: str) -> dict[str, bool]:
     """Return process compliance booleans for the agent output."""
-    return {
-        name: bool(pattern.search(text))
-        for name, pattern in PROCESS_PATTERNS.items()
-    }
+    return {name: bool(pattern.search(text)) for name, pattern in PROCESS_PATTERNS.items()}
 
 
 def score_fixture(
@@ -327,20 +344,14 @@ def score_fixture(
     # Categorize ground-truth findings for missing/perspective coverage
     missing_cat_total = sum(1 for f in gt.findings if f.category == "missing")
     perspective_cat_total = sum(1 for f in gt.findings if f.category == "perspective")
-    missing_matched = sum(
-        1 for f in gt.findings if f.category == "missing" and f.id in matched
-    )
+    missing_matched = sum(1 for f in gt.findings if f.category == "missing" and f.id in matched)
     perspective_matched = sum(
         1 for f in gt.findings if f.category == "perspective" and f.id in matched
     )
 
     # Evidence rate = CRITICAL+MAJOR findings with file:line evidence
-    crit_maj = [
-        p for p in parsed if p.severity.upper() in {"CRITICAL", "MAJOR", "HIGH", "MEDIUM"}
-    ]
-    evidence_rate = (
-        sum(1 for p in crit_maj if p.has_evidence) / len(crit_maj) if crit_maj else 0.0
-    )
+    crit_maj = [p for p in parsed if p.severity.upper() in {"CRITICAL", "MAJOR", "HIGH", "MEDIUM"}]
+    evidence_rate = sum(1 for p in crit_maj if p.has_evidence) / len(crit_maj) if crit_maj else 0.0
 
     process_flags = detect_process_flags(agent_output)
     process_compliance = sum(process_flags.values()) / max(len(process_flags), 1)
@@ -348,13 +359,9 @@ def score_fixture(
     scores = {
         "true_positive_rate": matched_count / total_gt,
         "severity_accuracy": severity_correct / matched_count if matched_count else 0.0,
-        "missing_coverage": (
-            missing_matched / missing_cat_total if missing_cat_total else 1.0
-        ),
+        "missing_coverage": (missing_matched / missing_cat_total if missing_cat_total else 1.0),
         "perspective_coverage": (
-            perspective_matched / perspective_cat_total
-            if perspective_cat_total
-            else 1.0
+            perspective_matched / perspective_cat_total if perspective_cat_total else 1.0
         ),
         "evidence_rate": evidence_rate,
         "process_compliance": process_compliance,

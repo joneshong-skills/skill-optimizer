@@ -66,9 +66,10 @@ The scorer is severity-adjacency-tolerant by default — `MAJOR` for an expected
 
 ## Existing Fixtures
 
-| ID | Domain | Severity Mix | Purpose |
-|----|--------|--------------|---------|
-| code-async-cache | code | 2 CRITICAL / 1 MAJOR / 1 MINOR | Smoke test fixture; covers race + memory + observability + ops perspective |
+| ID | Domain | Severity Mix | Categories | Purpose |
+|----|--------|--------------|------------|---------|
+| code-async-cache | code | 2 CRITICAL / 1 MAJOR / 1 MINOR | finding ×3, perspective ×1 | Smoke test fixture; covers race + memory + observability + ops perspective |
+| plan-oauth-migration | plan | 2 CRITICAL / 2 MAJOR / 2 MINOR | finding ×2, missing ×2, perspective ×2 | Plan-domain fixture; exercises plan-specific Phase 4 (assumptions / pre-mortem / dependency / ambiguity / rollback) and executor/stakeholder perspectives |
 
 ## Source
 

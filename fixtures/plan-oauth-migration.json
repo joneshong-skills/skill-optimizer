@@ -1,0 +1,58 @@
+{
+  "fixtureId": "plan-oauth-migration",
+  "fixturePath": "fixtures/plan/plan-oauth-migration.md",
+  "domain": "plan",
+  "expectedVerdict": "REVISE",
+  "isCleanBaseline": false,
+  "description": "Plan-domain fixture: 'Add OAuth2 social login to existing email-only auth'. 6 findings covering finding/missing/perspective categories. Used to validate that reviewer/critic agents apply plan-specific Phase 4 (Key Assumptions / Pre-Mortem / Dependency Audit / Ambiguity Scan / Rollback Analysis) and the executor/stakeholder/skeptic perspectives.",
+  "findings": [
+    {
+      "id": "PLAN-CRIT-1",
+      "severity": "CRITICAL",
+      "category": "finding",
+      "summary": "Session migration mid-flight unspecified — existing email-session users during deployment may lose state",
+      "keywords": ["session", "migration", "mid-flight", "deploy", "existing users", "in-flight"],
+      "explanation": "The plan switches the auth middleware from email-only to dual email+OAuth. It does not specify what happens to users with active email-based sessions when the new code deploys: are sessions preserved, force-renewed, or dropped? An undocumented session-flush during deploy would log out every active user simultaneously. Pre-mortem: deploy at peak traffic → mass logout → support flood."
+    },
+    {
+      "id": "PLAN-CRIT-2",
+      "severity": "CRITICAL",
+      "category": "missing",
+      "summary": "No rollback path defined if OAuth provider has an outage during cutover",
+      "keywords": ["rollback", "outage", "provider", "downtime", "fallback", "recovery"],
+      "explanation": "The plan assumes the OAuth provider is always available. There is no rollback procedure for: (a) provider outage during deployment, (b) provider deprecating the API version we depend on, (c) needing to disable OAuth for security reasons mid-flight. Standard pattern: feature flag + email-only fallback path that stays maintained for at least one quarter."
+    },
+    {
+      "id": "PLAN-MAJ-1",
+      "severity": "MAJOR",
+      "category": "finding",
+      "summary": "Token refresh strategy not addressed — OAuth2 access tokens expire and the plan does not specify the refresh flow",
+      "keywords": ["token", "refresh", "expire", "expiry", "renewal", "lifecycle"],
+      "explanation": "OAuth2 access tokens typically expire in 1 hour. The plan describes the initial authorization code exchange but says nothing about: storing refresh tokens, automatic refresh before API calls, handling refresh failures (e.g., user revoked access). Without this, every OAuth user gets logged out after the first hour."
+    },
+    {
+      "id": "PLAN-MAJ-2",
+      "severity": "MAJOR",
+      "category": "missing",
+      "summary": "Account linking ambiguity unresolved — what if OAuth email matches an existing email-only account?",
+      "keywords": ["account linking", "match", "merge", "conflict", "ambiguity", "existing"],
+      "explanation": "If a user signs up via OAuth with an email that already has an email-only account, the plan does not specify whether to: (a) auto-link (security risk if OAuth-side email is unverified), (b) prompt user to link with email-side authentication, (c) treat as separate accounts. Each choice has very different UX and security implications. Ambiguity scan: two competent developers will pick different defaults."
+    },
+    {
+      "id": "PLAN-MIN-1",
+      "severity": "MINOR",
+      "category": "perspective",
+      "summary": "Stakeholder perspective: success criterion is a vanity metric (OAuth signups grow), not a meaningful outcome (auth friction drops)",
+      "keywords": ["stakeholder", "success criteria", "vanity metric", "outcome", "friction", "measurable"],
+      "explanation": "The plan defines success as 'X% of new signups use OAuth within Q1'. This is measurable but vanity — adoption rate does not prove auth friction was actually reduced (users may still abandon, just earlier). A stakeholder-perspective review would push for: signup completion rate change, time-to-first-action change, or support-ticket volume change."
+    },
+    {
+      "id": "PLAN-MIN-2",
+      "severity": "MINOR",
+      "category": "perspective",
+      "summary": "Executor perspective: ownership of provider-side configuration not assigned — who rotates secrets, monitors deprecation notices?",
+      "keywords": ["executor", "ownership", "rotation", "deprecation", "monitoring", "operational"],
+      "explanation": "The plan delivers OAuth integration but does not name the team responsible for ongoing provider-side operations: rotating client-side secrets quarterly, watching the provider's deprecation calendar, responding to provider security advisories. Executor-perspective question: 'Who do I escalate to when the provider sends a breaking-change notice?' Currently unanswered."
+    }
+  ]
+}
