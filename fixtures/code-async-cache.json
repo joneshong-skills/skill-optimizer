@@ -1,0 +1,42 @@
+{
+  "fixtureId": "code-async-cache",
+  "fixturePath": "fixtures/code/code-async-cache.md",
+  "domain": "code",
+  "expectedVerdict": "REVISE",
+  "isCleanBaseline": false,
+  "description": "Sample fixture for the reviewer/critic agents — async cache module with 4 known issues. Used by quality_engine.py to compute TPR / severity / missing-coverage / evidence-rate / process-compliance scores.",
+  "findings": [
+    {
+      "id": "CACHE-CRIT-1",
+      "severity": "CRITICAL",
+      "category": "finding",
+      "summary": "Race condition between cache.get and cache.set — two concurrent misses both call upstream and double-write",
+      "keywords": ["race", "condition", "concurrent", "cache stampede", "single-flight", "double-write"],
+      "explanation": "When two callers miss the cache simultaneously, both call the upstream service and both write the result. Causes thundering-herd on cold start. Needs a single-flight / coalescing pattern (e.g., asyncio.Lock per-key, or a request-coalescer)."
+    },
+    {
+      "id": "CACHE-CRIT-2",
+      "severity": "CRITICAL",
+      "category": "finding",
+      "summary": "Eviction policy unbounded — dict grows forever, no LRU/TTL",
+      "keywords": ["eviction", "unbounded", "memory leak", "lru", "ttl", "max size"],
+      "explanation": "The internal dict has no size cap and no TTL. Long-running process accumulates entries until OOM. Needs an LRU bound (functools.lru_cache or cachetools.TTLCache) or explicit eviction."
+    },
+    {
+      "id": "CACHE-MAJ-1",
+      "severity": "MAJOR",
+      "category": "missing",
+      "summary": "No metric emission on hit/miss — operability blind spot",
+      "keywords": ["metric", "observability", "hit rate", "telemetry", "counter"],
+      "explanation": "There is no instrumentation for cache hit / miss / eviction. Production tuning relies on these signals — without them, regressions in hit rate are invisible."
+    },
+    {
+      "id": "CACHE-MIN-1",
+      "severity": "MINOR",
+      "category": "perspective",
+      "summary": "Ops perspective: no graceful degradation when upstream times out — entire request fails",
+      "keywords": ["timeout", "graceful", "degradation", "fallback", "stale", "circuit breaker"],
+      "explanation": "When the upstream call times out, the cache returns the exception. A typical operability pattern returns stale data (stale-while-revalidate) or trips a circuit breaker. Currently a single upstream blip cascades to all callers."
+    }
+  ]
+}

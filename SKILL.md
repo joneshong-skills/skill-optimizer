@@ -6,7 +6,7 @@ description: >-
   "improve this skill", "改進 skill", "優化技能", "skill 需要更新",
   "剛剛那個流程可以改進", or after a skill execution encounters errors,
   workarounds, user corrections, or outdated behavior.
-version: 0.3.0
+version: 0.4.0
 tools: Read, Glob, Grep, Edit, Bash, Write, Task, WebSearch
 argument-hint: "skill name (or leave blank to auto-detect from context)"
 ---
@@ -228,6 +228,81 @@ Examples of cross-skill learnings:
 - Adding speculative features the user hasn't needed
 - Removing fallback paths just because the primary path worked this time
 
+## Quality Engine — Quantitative Verification (Optional, Recommended for Reviewer/Critic Skills)
+
+For reviewer-type skills (`reviewer`, `tracer`, `verifier`, harsh-critic variants),
+qualitative multi-agent evaluation is necessary but not sufficient. The Quality Engine
+adds **measurable regression detection** — score the same agent against ground-truth
+fixtures before and after a change, see a number move.
+
+### When to Use
+
+- The skill being optimized is a **reviewer** or **critic** (any agent that produces structured findings).
+- A change touches the Investigation Protocol, severity calibration, or output structure.
+- You need to justify a change to a stable skill (composite_score must improve, or process flags must light up).
+
+### Workflow
+
+```bash
+ENGINE="~/.local/bin/python3 ~/.claude/skills/skill-optimizer/scripts/quality_engine.py"
+FIXTURE="~/.claude/skills/skill-optimizer/fixtures/code-async-cache.json"
+
+# 1. Baseline current reviewer
+$ENGINE score --fixture $FIXTURE --output current-reviewer-output.md > /tmp/baseline.json
+$ENGINE baseline --register reviewer-pre-change --report /tmp/baseline.json
+
+# 2. Apply your skill change, then re-run reviewer on same fixture, save output
+
+# 3. A/B comparison
+$ENGINE ab --fixture $FIXTURE \
+  --baseline current-reviewer-output.md \
+  --candidate new-reviewer-output.md
+# → JSON with delta_composite + verdict (candidate-wins | baseline-wins | neutral)
+
+# 4. Process flag check (was the protocol followed?)
+$ENGINE flags --output new-reviewer-output.md
+```
+
+### Composite Score
+
+```
+composite = TPR              × 0.30
+          + severity_accuracy × 0.15
+          + missing_coverage × 0.20
+          + perspective_coverage × 0.15
+          + evidence_rate    × 0.10
+          + process_compliance × 0.10
+```
+
+Top-tier reviewer should score ≥ 0.7. Below 0.5 = the protocol or fixture needs work.
+
+### Process Compliance Flags
+
+Three booleans detect whether the agent **followed the protocol**, not just whether it
+got the right answer by accident:
+
+| Flag | Lights up when output contains |
+|------|-------------------------------|
+| `pre_commitment` | "Pre-commitment Predictions" heading or bold marker |
+| `multi_perspective` | "Multi-Perspective" heading OR "as a {security/new-hire/ops/executor/...}" |
+| `gap_analysis` | "What's Missing" or "Gap Analysis" heading |
+
+A skill can score high TPR but fail process flags — that's a regression signal even
+when current output looks acceptable. Output that hits accidentally won't survive when
+fixtures evolve.
+
+### Adding Fixtures
+
+1. Pick a representative artifact (code module / plan / design doc) the skill should review.
+2. Author a JSON ground truth at `fixtures/<domain>-<slug>.json` listing the findings a
+   top-tier reviewer should surface.
+3. Categorize each finding: `finding` / `missing` / `perspective`.
+4. Pick 3-7 discriminating keywords per finding.
+5. Run a known-good reviewer to validate ≥ 0.7 composite. If not, your fixture is over-specified.
+
+See `fixtures/README.md` for the schema and `references/quality-engine-protocol.md`
+for the full protocol.
+
 ## Continuous Improvement
 
 This skill evolves with each use. After every invocation:
@@ -252,3 +327,13 @@ Accumulated lessons signal when to run `/skill-optimizer` for a deeper structura
 ### Reference Files
 - **`references/analysis-framework.md`** — Detailed checklist for analyzing skill execution,
   technology lifecycle tracking, and cross-skill improvement patterns
+- **`references/quality-engine-protocol.md`** — Evidence-driven scoring protocol (composite formula,
+  process compliance flags, A/B comparison, baseline registry) — cannibalized from oh-my-claudecode
+
+### Scripts
+- **`scripts/quality_engine.py`** — Quality Engine CLI: score / ab / flags / baseline.
+  Python 3.12 stdlib only. See SKILL.md "Quality Engine" section for usage.
+
+### Fixtures
+- **`fixtures/`** — Ground-truth JSON files for reviewer/critic skill scoring.
+  See `fixtures/README.md` for schema and authoring rules.
