@@ -11,7 +11,7 @@
       "severity": "CRITICAL",
       "category": "finding",
       "summary": "Race condition between cache.get and cache.set — two concurrent misses both call upstream and double-write",
-      "keywords": ["race", "condition", "concurrent", "cache stampede", "single-flight", "double-write"],
+      "keywords": ["race", "condition", "concurrent", "thundering", "herd", "single-flight", "stampede"],
       "explanation": "When two callers miss the cache simultaneously, both call the upstream service and both write the result. Causes thundering-herd on cold start. Needs a single-flight / coalescing pattern (e.g., asyncio.Lock per-key, or a request-coalescer)."
     },
     {

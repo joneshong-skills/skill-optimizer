@@ -75,13 +75,40 @@ SEVERITY_PREFIX = re.compile(
 )
 
 # Perspective-finding start: "As a security engineer:", "As the stakeholder:",
-# "From the executor perspective:" — typically appear without a severity prefix
-# in multi-perspective sections. Default severity for these is MINOR.
+# "From the executor perspective:", "**Security**:", "**Ops**:" — typically
+# appear without a severity prefix in multi-perspective sections. Default
+# severity for these is MINOR.
 PERSPECTIVE_START = re.compile(
-    r"^(?:as\s+(?:a|an|the)\s+[\w-]+(?:\s+[\w-]+)?\s*[:,]"
-    r"|from\s+(?:a|an|the)\s+[\w-]+(?:\s+[\w-]+)?\s+perspective\s*[:,])",
+    r"^(?:"
+    r"as\s+(?:a|an|the)\s+[\w-]+(?:\s+[\w-]+)?\s*[:,]"
+    r"|from\s+(?:a|an|the)\s+[\w-]+(?:\s+[\w-]+)?\s+perspective\s*[:,]"
+    r"|\*\*\s*(?:security|new[- ]?hire|ops(?:\s+engineer)?|executor|stakeholder|skeptic)\s*\*\*\s*[:.]"
+    r")",
     re.IGNORECASE,
 )
+
+# Section heading patterns — when a markdown heading or bold marker introduces a
+# section (e.g. `## Critical Findings`, `**What's Missing**:`), every list item
+# inside that section inherits the section's severity if no inline SEVERITY token
+# is present.
+SECTION_HEADERS: list[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"^\s*(?:#{2,4}\s*|\*\*\s*)critical\s+findings?\b", re.IGNORECASE), "CRITICAL"),
+    (re.compile(r"^\s*(?:#{2,4}\s*|\*\*\s*)major\s+findings?\b", re.IGNORECASE), "MAJOR"),
+    (re.compile(r"^\s*(?:#{2,4}\s*|\*\*\s*)minor\s+findings?\b", re.IGNORECASE), "MINOR"),
+    (re.compile(r"^\s*(?:#{2,4}\s*|\*\*\s*)what'?s\s+missing\b", re.IGNORECASE), "MAJOR"),
+    (re.compile(r"^\s*(?:#{2,4}\s*|\*\*\s*)gap[s]?\s*analysis\b", re.IGNORECASE), "MAJOR"),
+    (re.compile(r"^\s*(?:#{2,4}\s*|\*\*\s*)multi[- ]?perspective", re.IGNORECASE), "MINOR"),
+    (re.compile(r"^\s*(?:#{2,4}\s*|\*\*\s*)open\s+questions?\b", re.IGNORECASE), None),  # unscored
+]
+
+
+def _detect_section(stripped: str) -> tuple[bool, str | None]:
+    """Return (is_section_header, severity_for_items)."""
+    for pat, sev in SECTION_HEADERS:
+        if pat.match(stripped):
+            return True, sev
+    return False, ""
+
 
 # file:line evidence pattern (e.g. `auth.ts:42`, `src/foo.py:100-110`)
 EVIDENCE_PATTERN = re.compile(
@@ -239,6 +266,8 @@ def parse_agent_output(text: str) -> list[ParsedFinding]:
     findings: list[ParsedFinding] = []
     current: list[str] = []
     current_sev = "UNKNOWN"
+    section_sev: str | None = None  # severity inherited from current section heading
+    in_unscored_section = False  # e.g. "Open Questions" — items skipped
 
     def flush():
         if current:
@@ -256,36 +285,55 @@ def parse_agent_output(text: str) -> list[ParsedFinding]:
     in_finding = False
     for line in lines:
         stripped = line.strip()
-        # Strip leading list/bullet markers for perspective-start detection,
-        # so "- As the stakeholder: ..." also counts.
         delisted = re.sub(r"^(?:[-*]|\d+\.)\s+", "", stripped)
-        is_structural_start = re.match(r"^(?:[-*]|\d+\.)\s+", stripped) or re.match(
-            r"^#{2,4}\s+", stripped
+
+        # Detect section header (## Critical Findings / **What's Missing** / ...)
+        is_section, sec_sev = _detect_section(stripped)
+        if is_section:
+            flush()
+            current = []
+            in_finding = False
+            section_sev = sec_sev
+            in_unscored_section = sec_sev is None
+            continue
+
+        if in_unscored_section:
+            continue
+
+        is_structural_start = bool(
+            re.match(r"^(?:[-*]|\d+\.)\s+", stripped) or re.match(r"^#{2,4}\s+", stripped)
         )
         is_perspective_start = bool(PERSPECTIVE_START.match(delisted))
+        inline_sev_match = SEVERITY_PREFIX.search(stripped) if is_structural_start else None
 
-        if is_structural_start and SEVERITY_PREFIX.search(stripped):
+        # A new finding starts when we see a structural element OR a perspective marker.
+        if is_structural_start and (inline_sev_match or section_sev):
             flush()
             current = [stripped]
-            m = SEVERITY_PREFIX.search(stripped)
-            current_sev = m.group(1).upper() if m else "UNKNOWN"
+            current_sev = (
+                inline_sev_match.group(1).upper() if inline_sev_match else section_sev or "UNKNOWN"
+            )
             in_finding = True
         elif is_perspective_start:
             flush()
             current = [stripped]
-            current_sev = "MINOR"  # perspective findings default to MINOR
+            current_sev = section_sev or "MINOR"
             in_finding = True
         elif in_finding:
             if not stripped:
                 current.append(line)
-            elif re.match(r"^(?:[-*]|\d+\.)\s+", stripped) or re.match(r"^#{2,4}\s+", stripped):
+            elif is_structural_start:
                 flush()
-                current = [stripped]
-                m = SEVERITY_PREFIX.search(stripped)
-                if m:
-                    current_sev = m.group(1).upper()
+                if inline_sev_match or section_sev:
+                    current = [stripped]
+                    current_sev = (
+                        inline_sev_match.group(1).upper()
+                        if inline_sev_match
+                        else section_sev or "UNKNOWN"
+                    )
                 elif PERSPECTIVE_START.match(delisted):
-                    current_sev = "MINOR"
+                    current = [stripped]
+                    current_sev = section_sev or "MINOR"
                 else:
                     current = []
                     in_finding = False

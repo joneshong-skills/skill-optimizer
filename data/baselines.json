@@ -1,0 +1,46 @@
+{
+  "baselines": [
+    {
+      "agent_id": "reviewer-2026-05-08-critic",
+      "registered_at": "2026-05-08T07:23:03.754726",
+      "report": {
+        "fixture_id": "code-async-cache",
+        "matched_ids": [
+          "CACHE-CRIT-1",
+          "CACHE-CRIT-2",
+          "CACHE-MAJ-1"
+        ],
+        "missed_ids": [
+          "CACHE-MIN-1"
+        ],
+        "spurious_texts": [
+          "2. **Loader 拋出例外時寫入 None（靜默資料污染）** (`code-async-cache.py:33–34`)\n   若 `await self._loader(key)` 拋出例外，`value` 未被賦值，`self._store[key] = value` 不會執行（例外向上傳播）——這是正確行為。**但如果 loader 回傳 `None`（合法回傳值），它會被快取**，",
+          "1. **`get_many` 串列執行，無並發** (`code-async-cache.py:39–40`)\n   `for k in keys: results[k] = await self.get(k)` 是順序執行。若 `keys` 有 10 個 miss，loader 各需 50ms，總耗時 500ms。改用 `asyncio.gather(*[self.get(k) for k i",
+          "- **`get_cache()` 的 lazy init 在 async 環境下不是執行緒安全的**（`code-async-cache.py:61–63`）",
+          "- **`example_loader` 被 singleton 綁定為生產 loader**（`code-async-cache.py:63`）",
+          "- **`size()` 在多 coroutine 環境下是瞬時快照**（`code-async-cache.py:46–47`）\n\n---",
+          "- **Per-key in-flight deduplication**（`asyncio.Lock` dict 或 pending `Future` dict）— 解決 Thundering herd",
+          "- **TTL 或 maxsize 上限** — 防止記憶體無限成長",
+          "- **Loader 回傳 `None` 的語意定義** — 要不要快取 `None`？要，就需要 sentinel；不要，就需要 guard",
+          "- **測試** — 模組本身沒有任何 test；race condition 最難被靜態分析捕捉，需要並發測試\n\n---",
+          "- **Security**: 無直接 security 漏洞。但若 key 來自外部請求（如 URL 參數），cache 成長無上限可成為 DoS 向量（記憶體耗盡）。",
+          "- **New-hire**: `get_cache()` 回傳的是 singleton，呼叫方若在測試中調用後無法 reset（沒有 `reset_cache()` 或 dependency injection 點），會造成測試汙染。`invalidate()` 存在但 singleton 沒有暴露 reset 方法。",
+          "- **Ops**: 沒有任何可觀測性 hook（no logging, no metrics）。快取 miss 率、loader 延遲、store size 全部不可見。當 enrichment 變慢時，無法從外部判斷是快取失效還是 loader 退化。\n\n---\n\n**Verdict Justification**:\n\nCritical #1（race condition）在任何有並發 enr"
+        ],
+        "true_positive_rate": 0.75,
+        "severity_accuracy": 1.0,
+        "missing_coverage": 1.0,
+        "perspective_coverage": 0.0,
+        "evidence_rate": 0.4444444444444444,
+        "process_compliance": 1.0,
+        "process_flags": {
+          "pre_commitment": true,
+          "multi_perspective": true,
+          "gap_analysis": true
+        },
+        "composite": 0.7194444444444444
+      }
+    }
+  ],
+  "version": 1
+}
