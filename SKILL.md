@@ -1,14 +1,10 @@
 ---
 name: skill-optimizer
-description: >-
-  This skill should be used when the user asks to "optimize a skill",
-  "review skill performance", "update skill based on feedback",
-  "improve this skill", "改進 skill", "優化技能", "skill 需要更新",
-  "剛剛那個流程可以改進", or after a skill execution encounters errors,
-  workarounds, user corrections, or outdated behavior.
+description: "optimizer, optimize, review, performance, update, feedback, improve, 改進 skill, 優化技能, skill 需要更新, 剛剛那個流程可以改進"
 version: 0.4.0
 tools: Read, Glob, Grep, Edit, Bash, Write, Task, WebSearch
 argument-hint: "skill name (or leave blank to auto-detect from context)"
+disable-model-invocation: true
 ---
 
 # Skill Optimizer
