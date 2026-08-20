@@ -99,7 +99,7 @@ Cross-reference SKILL.md content against `~/.claude/rules/*.md` and `~/.claude/C
 
 | SKILL.md Pattern | Rule Violation |
 |-----------------|----------------|
-| Writes to `~/` root | Must use `~/workshop/` or `~/workshop/outputs/` |
+| Writes to `~/` root | Must use a dedicated output directory (`$CLAUDE_OUTPUTS_DIR`, default `~/.claude/outputs/`) |
 | Writes to `~/Desktop` or `~/Downloads` | Explicitly forbidden |
 | No output path specified | Should define output convention |
 
